@@ -1,0 +1,1184 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import axios from "axios";
+import Link from "next/link";
+import AdminLayout from "../../../_components/AdminLayout";
+import EditQuizForm from "./EditQuizForm";
+
+export default function CourseContentPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { courseId } = params;
+  
+  const [activeTab, setActiveTab] = useState("chapters");
+  const [course, setCourse] = useState(null);
+  const [chapters, setChapters] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const [pdfs, setPdfs] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Form states for adding new content
+  const [chapterForm, setChapterForm] = useState({ title: "", description: "", position: 1 });
+  const [videoForm, setVideoForm] = useState({ 
+    title: "", 
+    description: "", 
+    videoUrl: "", 
+    chapterId: "",
+    duration: 0,
+    position: 1
+  });
+  const [pdfForm, setPdfForm] = useState({ 
+    title: "", 
+    description: "", 
+    file: null,
+    chapterId: "",
+    position: 1
+  });
+  const [pdfFileName, setPdfFileName] = useState("");
+  const [quizForm, setQuizForm] = useState({ 
+    title: "", 
+    description: "", 
+    chapterId: "",
+    timeLimit: 30,
+    position: 1,
+    maxAttempts: 1,
+    allowResume: false,
+    passingScore: 70,
+    questions: []
+  });
+  
+  // State for managing quiz questions
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [currentQuestion, setCurrentQuestion] = useState({
+    question: "",
+    options: ["", "", "", ""],
+    correctOption: 0,
+    points: 1
+  });
+  
+  // UI states
+  const [showChapterForm, setShowChapterForm] = useState(false);
+  const [showVideoForm, setShowVideoForm] = useState(false);
+  const [showPdfForm, setShowPdfForm] = useState(false);
+  const [showQuizForm, setShowQuizForm] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  useEffect(() => {
+    const fetchCourseContent = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch course details
+        const courseResponse = await axios.get(`/api/admin/courses/${courseId}`);
+        setCourse(courseResponse.data.course);
+        
+        // Fetch chapters
+        const chaptersResponse = await axios.get(`/api/admin/courses/${courseId}/chapters`);
+        if (chaptersResponse.data.success) {
+          setChapters(chaptersResponse.data.chapters);
+        }
+        
+        // Fetch videos
+        try {
+          const videosResponse = await axios.get(`/api/admin/courses/${courseId}/videos`);
+          if (videosResponse.data.success) {
+            setVideos(videosResponse.data.videos);
+          }
+        } catch (error) {
+          console.log('No videos endpoint or error fetching videos:', error);
+        }
+        
+        // Fetch PDFs
+        try {
+          const pdfsResponse = await axios.get(`/api/admin/courses/${courseId}/pdfs`);
+          if (pdfsResponse.data.success) {
+            setPdfs(pdfsResponse.data.pdfs);
+          }
+        } catch (error) {
+          console.log('No PDFs endpoint or error fetching PDFs:', error);
+        }
+        
+        // Fetch quizzes
+        try {
+          const quizzesResponse = await axios.get(`/api/admin/courses/${courseId}/quizzes`);
+          if (quizzesResponse.data.success) {
+            setQuizzes(quizzesResponse.data.quizzes);
+          }
+        } catch (error) {
+          console.log('No quizzes endpoint or error fetching quizzes:', error);
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching course content:", error);
+        setError(error.response?.data?.error || "فشل في تحميل محتوى الكورس. يرجى المحاولة مرة أخرى.");
+        setLoading(false);
+      }
+    };
+
+    fetchCourseContent();
+  }, [courseId]);
+  
+  const handleChapterSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      // Validate form data
+      if (!chapterForm.title.trim()) {
+        throw new Error("عنوان الفصل مطلوب");
+      }
+      
+      const response = await axios.post(`/api/admin/courses/${courseId}/chapters`, {
+        ...chapterForm,
+        courseId
+      });
+      
+      if (response.data.success) {
+        // Add the new chapter to the state
+        setChapters([...chapters, response.data.chapter]);
+        setShowChapterForm(false);
+        setChapterForm({ title: "", description: "", position: chapters.length + 1 });
+      } else {
+        throw new Error(response.data.error || "فشل في إضافة الفصل");
+      }
+    } catch (error) {
+      console.error("Error adding chapter:", error);
+      setError(error.response?.data?.error || error.message || "فشل في إضافة الفصل. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handleVideoSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      // Validate form data
+      if (!videoForm.title.trim()) {
+        throw new Error("عنوان الفيديو مطلوب");
+      }
+      
+      if (!videoForm.videoUrl.trim()) {
+        throw new Error("رابط الفيديو مطلوب");
+      }
+      
+      if (!videoForm.chapterId) {
+        throw new Error("يجب اختيار الفصل");
+      }
+      
+      console.log("Submitting video:", videoForm);
+      
+      const response = await axios.post(`/api/admin/courses/${courseId}/videos`, {
+        ...videoForm,
+        courseId
+      });
+      
+      console.log("Video response:", response.data);
+      
+      if (response.data.success) {
+        setVideos([...videos, response.data.video]);
+        setShowVideoForm(false);
+        setVideoForm({ 
+          title: "", 
+          description: "", 
+          videoUrl: "", 
+          chapterId: "",
+          duration: 0,
+          position: videos.length + 1
+        });
+      } else {
+        throw new Error(response.data.error || "فشل في إضافة الفيديو");
+      }
+    } catch (error) {
+      console.error("Error adding video:", error);
+      setError(error.response?.data?.error || error.message || "فشل في إضافة الفيديو. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handlePdfSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      // Validate form data
+      if (!pdfForm.title.trim()) {
+        throw new Error("عنوان الملف مطلوب");
+      }
+      
+      if (!pdfForm.chapterId) {
+        throw new Error("يجب اختيار الفصل");
+      }
+      
+      if (!pdfForm.file) {
+        throw new Error("يرجى اختيار ملف PDF");
+      }
+      
+      console.log("Submitting PDF:", pdfForm);
+      
+      const formData = new FormData();
+      formData.append("file", pdfForm.file);
+      formData.append("title", pdfForm.title);
+      formData.append("description", pdfForm.description);
+      formData.append("chapterId", pdfForm.chapterId);
+      formData.append("position", pdfForm.position);
+      formData.append("courseId", courseId);
+      
+      const response = await axios.post(`/api/admin/courses/${courseId}/pdfs`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
+      });
+      
+      console.log("PDF response:", response.data);
+      
+      if (response.data.success) {
+        setPdfs([...pdfs, response.data.pdf]);
+        setShowPdfForm(false);
+        setPdfForm({ 
+          title: "", 
+          description: "", 
+          file: null, 
+          chapterId: "",
+          position: pdfs.length + 1
+        });
+        setPdfFileName("");
+      } else {
+        throw new Error(response.data.error || "فشل في إضافة الملف");
+      }
+    } catch (error) {
+      console.error("Error adding PDF:", error);
+      setError(error.response?.data?.error || error.message || "فشل في إضافة الملف. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handlePdfFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.type !== "application/pdf") {
+      setError("يرجى اختيار ملف بصيغة PDF فقط");
+      return;
+    }
+
+    try {
+      setPdfUploading(true);
+      setUploadProgress(0);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'pdf');
+      
+      const response = await axios.post('/api/admin/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        },
+      });
+      
+      console.log('PDF uploaded successfully:', response.data);
+      setPdfForm({...pdfForm, pdfUrl: response.data.url});
+      setPdfFileName(file.name);
+      
+    } catch (error) {
+      console.error('Error uploading PDF:', error);
+      setError('فشل في رفع الملف. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setPdfUploading(false);
+    }
+  };
+  
+  const addQuestionToQuiz = () => {
+    if (!currentQuestion.question.trim()) {
+      setError("يرجى إدخال نص السؤال");
+      return;
+    }
+    
+    if (currentQuestion.options.some(option => !option.trim())) {
+      setError("يرجى إدخال جميع الخيارات");
+      return;
+    }
+    
+    const newQuestions = [...quizQuestions, {...currentQuestion, id: Date.now()}];
+    setQuizQuestions(newQuestions);
+    setQuizForm({...quizForm, questions: newQuestions});
+    
+    // Reset current question form
+    setCurrentQuestion({
+      question: "",
+      options: ["", "", "", ""],
+      correctOption: 0,
+      points: 1
+    });
+  };
+  
+  const removeQuestion = (questionId) => {
+    const updatedQuestions = quizQuestions.filter(q => q.id !== questionId);
+    setQuizQuestions(updatedQuestions);
+    setQuizForm({...quizForm, questions: updatedQuestions});
+  };
+  
+  const handleOptionChange = (index, value) => {
+    const updatedOptions = [...currentQuestion.options];
+    updatedOptions[index] = value;
+    setCurrentQuestion({...currentQuestion, options: updatedOptions});
+  };
+  
+  const handleQuizSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      // Validate form data
+      if (!quizForm.title.trim()) {
+        throw new Error("عنوان الاختبار مطلوب");
+      }
+      
+      if (!quizForm.chapterId) {
+        throw new Error("يجب اختيار الفصل");
+      }
+      
+      if (quizQuestions.length === 0) {
+        throw new Error("يجب إضافة سؤال واحد على الأقل");
+      }
+      
+      console.log("Submitting quiz:", { ...quizForm, questions: quizQuestions });
+      
+      const response = await axios.post(`/api/admin/courses/${courseId}/quizzes`, {
+        ...quizForm,
+        questions: quizQuestions,
+        courseId
+      });
+      
+      console.log("Quiz response:", response.data);
+      
+      if (response.data.success) {
+        setQuizzes([...quizzes, response.data.quiz]);
+        setShowQuizForm(false);
+        setQuizForm({ 
+          title: "", 
+          description: "", 
+          chapterId: "",
+          timeLimit: 30,
+          position: quizzes.length + 1,
+          maxAttempts: 1,
+          allowResume: false,
+          passingScore: 70,
+          questions: []
+        });
+        setQuizQuestions([]);
+      } else {
+        throw new Error(response.data.error || "فشل في إضافة الاختبار");
+      }
+    } catch (error) {
+      console.error("Error adding quiz:", error);
+      setError(error.response?.data?.error || error.message || "فشل في إضافة الاختبار. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-Olive-600"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
+  
+  // Show error as a notification but don't block the entire page
+  const renderError = () => {
+    if (!error) return null;
+    
+    return (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 flex justify-between items-center">
+        <p>{error}</p>
+        <button 
+          onClick={() => setError(null)} 
+          className="text-red-700 hover:text-red-900"
+        >
+          ×
+        </button>
+      </div>
+    );
+  };
+  
+  if (!course) {
+    return (
+      <AdminLayout>
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+          <p>الكورس غير موجود.</p>
+        </div>
+        <button
+          onClick={() => router.push('/admin/dashboard')}
+          className="bg-Olive-600 text-white px-4 py-2 rounded-md hover:bg-Olive-700"
+        >
+          العودة إلى لوحة التحكم
+        </button>
+      </AdminLayout>
+    );
+  }
+  
+  return (
+    <AdminLayout>
+      <div className="mb-6">
+        {renderError()}
+        
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">إدارة محتوى الكورس: {course.title}</h1>
+          <div className="flex space-x-3 space-x-reverse">
+            <button
+              onClick={() => router.back()}
+              className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+            >
+              العودة
+            </button>
+            <Link 
+              href={`/admin/courses/${courseId}`}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              عرض تفاصيل الكورس
+            </Link>
+          </div>
+        </div>
+      </div>
+      
+      {/* Tabs */}
+      <div className="bg-white dark:bg-midNight-900 shadow-md rounded-lg overflow-hidden">
+        <div className="flex border-b">
+          <button 
+            className={`px-6 py-3 text-lg font-medium ${activeTab === 'chapters' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('chapters')}
+          >
+            الفصول
+          </button>
+          <button 
+            className={`px-6 py-3 text-lg font-medium ${activeTab === 'videos' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('videos')}
+          >
+            الفيديوهات
+          </button>
+          <button 
+            className={`px-6 py-3 text-lg font-medium ${activeTab === 'pdfs' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('pdfs')}
+          >
+            الملفات PDF
+          </button>
+          <button 
+            className={`px-6 py-3 text-lg font-medium ${activeTab === 'quizzes' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('quizzes')}
+          >
+            الاختبارات
+          </button>
+        </div>
+        
+        <div className="p-6">
+          {/* Chapters Tab */}
+          {activeTab === 'chapters' && (
+            <>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">إدارة الفصول</h2>
+                <button 
+                  onClick={() => setShowChapterForm(!showChapterForm)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                >
+                  {showChapterForm ? 'إلغاء' : 'إضافة فصل جديد'}
+                </button>
+              </div>
+              
+              {showChapterForm && (
+                <div className="bg-gray-50 dark:bg-midNight-800 p-4 rounded-md mb-6">
+                  <h3 className="text-lg font-semibold mb-4">إضافة فصل جديد</h3>
+                  <form onSubmit={handleChapterSubmit}>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="chapterTitle">
+                        عنوان الفصل
+                      </label>
+                      <input
+                        id="chapterTitle"
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={chapterForm.title}
+                        onChange={(e) => setChapterForm({...chapterForm, title: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="chapterDescription">
+                        وصف الفصل
+                      </label>
+                      <textarea
+                        id="chapterDescription"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={chapterForm.description}
+                        onChange={(e) => setChapterForm({...chapterForm, description: e.target.value})}
+                        rows="3"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="chapterPosition">
+                        الترتيب
+                      </label>
+                      <input
+                        id="chapterPosition"
+                        type="number"
+                        min="1"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={chapterForm.position}
+                        onChange={(e) => setChapterForm({...chapterForm, position: parseInt(e.target.value)})}
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'جاري الحفظ...' : 'حفظ الفصل'}
+                      </button>
+                      <button
+                        type="button"
+                        className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                        onClick={() => setShowChapterForm(false)}
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              
+              {chapters.length === 0 ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md text-yellow-700 dark:text-yellow-400">
+                  لا توجد فصول حالياً. أضف فصلاً جديداً للبدء.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {chapters.map((chapter) => (
+                    <div key={chapter._id} className="bg-white dark:bg-midNight-800 border border-gray-200 dark:border-midNight-700 p-4 rounded-md">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-semibold">{chapter.position}. {chapter.title}</h3>
+                          <p className="text-gray-600 dark:text-gray-400 mt-1">{chapter.description}</p>
+                        </div>
+                        <div className="flex space-x-2 space-x-reverse">
+                          <button
+                            className="text-blue-600 hover:text-blue-800"
+                            onClick={() => {
+                              // Edit chapter logic
+                            }}
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 mr-3"
+                            onClick={() => {
+                              // Delete chapter logic
+                            }}
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* Videos Tab */}
+          {activeTab === 'videos' && (
+            <>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">إدارة الفيديوهات</h2>
+                <button 
+                  onClick={() => setShowVideoForm(!showVideoForm)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                >
+                  {showVideoForm ? 'إلغاء' : 'إضافة فيديو جديد'}
+                </button>
+              </div>
+              
+              {showVideoForm && (
+                <div className="bg-gray-50 dark:bg-midNight-800 p-4 rounded-md mb-6">
+                  <h3 className="text-lg font-semibold mb-4">إضافة فيديو جديد</h3>
+                  <form onSubmit={handleVideoSubmit}>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="videoTitle">
+                        عنوان الفيديو
+                      </label>
+                      <input
+                        id="videoTitle"
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={videoForm.title}
+                        onChange={(e) => setVideoForm({...videoForm, title: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="videoDescription">
+                        وصف الفيديو
+                      </label>
+                      <textarea
+                        id="videoDescription"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={videoForm.description}
+                        onChange={(e) => setVideoForm({...videoForm, description: e.target.value})}
+                        rows="3"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="videoUrl">
+                        رابط الفيديو
+                      </label>
+                      <input
+                        id="videoUrl"
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={videoForm.videoUrl}
+                        onChange={(e) => setVideoForm({...videoForm, videoUrl: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="videoDuration">
+                        مدة الفيديو (بالدقائق)
+                      </label>
+                      <input
+                        id="videoDuration"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={videoForm.duration}
+                        onChange={(e) => setVideoForm({...videoForm, duration: parseFloat(e.target.value)})}
+                        required
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="videoChapter">
+                        الفصل
+                      </label>
+                      <select
+                        id="videoChapter"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={videoForm.chapterId}
+                        onChange={(e) => setVideoForm({...videoForm, chapterId: e.target.value})}
+                        required
+                      >
+                        <option value="">-- اختر الفصل --</option>
+                        {chapters.map((chapter) => (
+                          <option key={chapter._id} value={chapter._id}>
+                            {chapter.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="videoPosition">
+                        الترتيب
+                      </label>
+                      <input
+                        id="videoPosition"
+                        type="number"
+                        min="1"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={videoForm.position}
+                        onChange={(e) => setVideoForm({...videoForm, position: parseInt(e.target.value)})}
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'جاري الحفظ...' : 'حفظ الفيديو'}
+                      </button>
+                      <button
+                        type="button"
+                        className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                        onClick={() => setShowVideoForm(false)}
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              
+              {videos.length === 0 ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md text-yellow-700 dark:text-yellow-400">
+                  لا توجد فيديوهات حالياً. أضف فيديو جديد للبدء.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Videos list will go here */}
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* PDFs Tab */}
+          {activeTab === 'pdfs' && (
+            <>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">إدارة ملفات PDF</h2>
+                <button 
+                  onClick={() => setShowPdfForm(!showPdfForm)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                >
+                  {showPdfForm ? 'إلغاء' : 'إضافة ملف PDF جديد'}
+                </button>
+              </div>
+              
+              {showPdfForm && (
+                <div className="bg-gray-50 dark:bg-midNight-800 p-4 rounded-md mb-6">
+                  <h3 className="text-lg font-semibold mb-4">إضافة ملف PDF جديد</h3>
+                  <form onSubmit={handlePdfSubmit}>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="pdfTitle">
+                        عنوان الملف
+                      </label>
+                      <input
+                        id="pdfTitle"
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={pdfForm.title}
+                        onChange={(e) => setPdfForm({...pdfForm, title: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="pdfDescription">
+                        وصف الملف
+                      </label>
+                      <textarea
+                        id="pdfDescription"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={pdfForm.description}
+                        onChange={(e) => setPdfForm({...pdfForm, description: e.target.value})}
+                        rows="3"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="pdfFile">
+                        ملف PDF
+                      </label>
+                      <div className="flex items-center">
+                        <label className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md cursor-pointer hover:bg-blue-700">
+                          <span>اختر ملف</span>
+                          <input
+                            id="pdfFile"
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={handlePdfFileChange}
+                            required
+                          />
+                        </label>
+                        {pdfFileName && (
+                          <span className="mr-3 text-gray-700 dark:text-gray-300">{pdfFileName}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="pdfChapter">
+                        الفصل
+                      </label>
+                      <select
+                        id="pdfChapter"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={pdfForm.chapterId}
+                        onChange={(e) => setPdfForm({...pdfForm, chapterId: e.target.value})}
+                        required
+                      >
+                        <option value="">-- اختر الفصل --</option>
+                        {chapters.map((chapter) => (
+                          <option key={chapter._id} value={chapter._id}>
+                            {chapter.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="pdfPosition">
+                        الترتيب
+                      </label>
+                      <input
+                        id="pdfPosition"
+                        type="number"
+                        min="1"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={pdfForm.position}
+                        onChange={(e) => setPdfForm({...pdfForm, position: parseInt(e.target.value)})}
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'جاري الحفظ...' : 'حفظ الملف'}
+                      </button>
+                      <button
+                        type="button"
+                        className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                        onClick={() => setShowPdfForm(false)}
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              
+              {pdfs.length === 0 ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md text-yellow-700 dark:text-yellow-400">
+                  لا توجد ملفات PDF حالياً. أضف ملفاً جديداً للبدء.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* PDFs list will go here */}
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* Quizzes Tab */}
+          {activeTab === 'quizzes' && (
+            <>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">إدارة الاختبارات</h2>
+                <button 
+                  onClick={() => {
+                    setShowQuizForm(!showQuizForm);
+                    if (editingQuiz) setEditingQuiz(null);
+                  }}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                  disabled={editingQuiz !== null}
+                >
+                  {showQuizForm ? 'إلغاء' : 'إضافة اختبار جديد'}
+                </button>
+              </div>
+              
+              {editingQuiz ? (
+                <EditQuizForm 
+                  quiz={editingQuiz} 
+                  onCancel={() => setEditingQuiz(null)} 
+                  onSuccess={(updatedQuiz) => {
+                    setQuizzes(quizzes.map(q => q._id === updatedQuiz._id ? updatedQuiz : q));
+                    setEditingQuiz(null);
+                  }}
+                  courseId={courseId}
+                  chapters={chapters}
+                />
+              ) : showQuizForm && (
+                <div className="mt-6">
+                  <h2 className="text-xl font-bold mb-4 text-right">إضافة اختبار جديد</h2>
+                  <div className="bg-gray-50 dark:bg-midNight-800 p-4 rounded-md mb-6">
+                    <h3 className="text-lg font-semibold mb-4">إضافة اختبار جديد</h3>
+                    <form onSubmit={handleQuizSubmit}>
+                      <div className="mb-4">
+                        <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizTitle">
+                          عنوان الاختبار
+                        </label>
+{{ ... }}
+                        <input
+                          id="quizTitle"
+                          type="text"
+                          className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                          value={quizForm.title}
+                          onChange={(e) => setQuizForm({...quizForm, title: e.target.value})}
+                          required
+                        />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizDescription">
+                        وصف الاختبار
+                      </label>
+                      <textarea
+                        id="quizDescription"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={quizForm.description}
+                        onChange={(e) => setQuizForm({...quizForm, description: e.target.value})}
+                        rows="3"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizChapter">
+                        الفصل
+                      </label>
+                      <select
+                        id="quizChapter"
+                        className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                        value={quizForm.chapterId}
+                        onChange={(e) => setQuizForm({...quizForm, chapterId: e.target.value})}
+                        required
+                      >
+                        <option value="">-- اختر الفصل --</option>
+                        {chapters.map((chapter) => (
+                          <option key={chapter._id} value={chapter._id}>
+                            {chapter.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizTimeLimit">
+                          الوقت المحدد (دقائق)
+                        </label>
+                        <input
+                          id="quizTimeLimit"
+                          type="number"
+                          min="1"
+                          className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                          value={quizForm.timeLimit}
+                          onChange={(e) => setQuizForm({...quizForm, timeLimit: parseInt(e.target.value)})}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizPosition">
+                          الترتيب
+                        </label>
+                        <input
+                          id="quizPosition"
+                          type="number"
+                          min="1"
+                          className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                          value={quizForm.position}
+                          onChange={(e) => setQuizForm({...quizForm, position: parseInt(e.target.value)})}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizMaxAttempts">
+                          عدد المحاولات المسموح بها
+                        </label>
+                        <input
+                          id="quizMaxAttempts"
+                          type="number"
+                          min="1"
+                          className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                          value={quizForm.maxAttempts}
+                          onChange={(e) => setQuizForm({...quizForm, maxAttempts: parseInt(e.target.value)})}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizPassingScore">
+                          درجة النجاح (%)
+                        </label>
+                        <input
+                          id="quizPassingScore"
+                          type="number"
+                          min="0"
+                          max="100"
+                          className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                          value={quizForm.passingScore}
+                          onChange={(e) => setQuizForm({...quizForm, passingScore: parseInt(e.target.value)})}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <div className="flex items-center">
+                        <input
+                          id="quizAllowResume"
+                          type="checkbox"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          checked={quizForm.allowResume}
+                          onChange={(e) => setQuizForm({...quizForm, allowResume: e.target.checked})}
+                        />
+                        <label htmlFor="quizAllowResume" className="mr-2 block text-gray-700 dark:text-gray-300">
+                          السماح بالخروج من الاختبار وتكملته لاحقاً
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-6 pt-6">
+                      <h4 className="text-lg font-semibold mb-4">إضافة أسئلة الاختبار</h4>
+                      
+                      {/* Current question form */}
+                      <div className="bg-white dark:bg-midNight-700 p-4 rounded-md mb-4 border border-gray-200 dark:border-gray-600">
+                        <div className="mb-4">
+                          <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="questionText">
+                            نص السؤال
+                          </label>
+                          <textarea
+                            id="questionText"
+                            className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                            value={currentQuestion.question}
+                            onChange={(e) => setCurrentQuestion({...currentQuestion, question: e.target.value})}
+                            rows="2"
+                            required
+                          />
+                        </div>
+                        
+                        <div className="mb-4">
+                          <label className="block text-gray-700 dark:text-gray-300 mb-2">
+                            الخيارات
+                          </label>
+                          {currentQuestion.options.map((option, index) => (
+                            <div key={index} className="flex items-center mb-2">
+                              <input
+                                type="radio"
+                                id={`option-${index}`}
+                                name="correctOption"
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                checked={currentQuestion.correctOption === index}
+                                onChange={() => setCurrentQuestion({...currentQuestion, correctOption: index})}
+                              />
+                              <label htmlFor={`option-${index}`} className="mr-2 text-gray-700 dark:text-gray-300 w-20">
+                                {index === 0 ? 'الإجابة الصحيحة:' : `الخيار ${index + 1}:`}
+                              </label>
+                              <input
+                                type="text"
+                                className="flex-1 px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                                value={option}
+                                onChange={(e) => handleOptionChange(index, e.target.value)}
+                                required
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="mb-4">
+                          <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="questionPoints">
+                            النقاط
+                          </label>
+                          <input
+                            id="questionPoints"
+                            type="number"
+                            min="1"
+                            className="w-full px-3 py-2 border rounded-md dark:bg-midNight-700 dark:border-midNight-600"
+                            value={currentQuestion.points}
+                            onChange={(e) => setCurrentQuestion({...currentQuestion, points: parseInt(e.target.value)})}
+                            required
+                          />
+                        </div>
+                        
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                            onClick={addQuestionToQuiz}
+                          >
+                            إضافة السؤال
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Questions list */}
+                      {quizQuestions.length > 0 && (
+                        <div className="mb-6">
+                          <h5 className="font-semibold mb-2">الأسئلة المضافة ({quizQuestions.length})</h5>
+                          <div className="grid grid-cols-1 gap-4 mt-6">
+                            {quizQuestions.map((question, index) => (
+                              <div key={index} className="p-4 bg-white dark:bg-midNight-800 rounded-lg shadow-md">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="font-semibold text-gray-800 dark:text-gray-100 mb-2">السؤال {index + 1}: {question.question}</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+                                      <ul className="list-disc me-4 space-y-1">
+                                        {question.options.map((option, optIndex) => (
+                                          <li key={optIndex} className={optIndex === question.correctOption ? 'text-green-600 dark:text-green-400 font-medium' : ''}>
+                                            {option} {optIndex === question.correctOption && '(الإجابة الصحيحة)'}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <button 
+                                      type="button"
+                                      onClick={() => handleOptionChange(index, question.question)}
+                                      className="text-blue-600 hover:text-blue-800 border border-blue-600 rounded-md px-2 py-1 mx-1"
+                                    >
+                                      تعديل
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      onClick={() => removeQuestion(index)}
+                                      className="text-red-600 hover:text-red-800 border border-red-600 rounded-md px-2 py-1 mx-1"
+                                    >
+                                      حذف
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'جاري الحفظ...' : 'حفظ الاختبار'}
+                      </button>
+                      <button
+                        type="button"
+                        className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                        onClick={() => {
+                          setShowQuizForm(false);
+                          setQuizQuestions([]);
+                        }}
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              
+              {quizzes.length === 0 ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md text-yellow-700 dark:text-yellow-400">
+                  لا توجد اختبارات حالياً. أضف اختباراً جديداً للبدء.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Quizzes list will go here */}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </AdminLayout>
+  );
+}
