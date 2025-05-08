@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import QuestionForm from './QuestionForm';
+// import QuestionForm from './QuestionForm';
 
 export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters }) {
   const [quizForm, setQuizForm] = useState({ 
@@ -33,6 +33,48 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // Load quiz data when editing an existing quiz
+  useEffect(() => {
+    if (editingQuiz) {
+      setShowQuizForm(true);
+      
+      // Load quiz data into form
+      setQuizForm({
+        title: editingQuiz.title || "",
+        description: editingQuiz.description || "",
+        chapterId: editingQuiz.chapterId || "",
+        timeLimit: editingQuiz.timeLimit || 30,
+        position: editingQuiz.position || 1,
+        maxAttempts: editingQuiz.maxAttempts || 1,
+        allowResume: editingQuiz.allowResume || false,
+        passingScore: editingQuiz.passingScore || 70
+      });
+      
+      // Load quiz questions
+      const fetchQuizQuestions = async () => {
+        try {
+          const response = await axios.get(`/api/admin/courses/${courseId}/quizzes/${editingQuiz._id}`);
+          if (response.data.success && response.data.questions) {
+            // Transform questions to the format expected by the form
+            const formattedQuestions = response.data.questions.map(q => ({
+              id: q._id,
+              question: q.question,
+              options: q.options.map(opt => opt.text),
+              correctOption: q.options.findIndex(opt => opt.isCorrect),
+              points: q.points || 1
+            }));
+            setQuizQuestions(formattedQuestions);
+          }
+        } catch (error) {
+          console.error('Error fetching quiz questions:', error);
+          setError('فشل في تحميل أسئلة الاختبار');
+        }
+      };
+      
+      fetchQuizQuestions();
+    }
+  }, [editingQuiz, courseId]);
+
   const handleQuizSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -54,16 +96,47 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
       
       console.log("Submitting quiz:", { ...quizForm, questions: quizQuestions });
       
-      const response = await axios.post(`/api/admin/courses/${courseId}/quizzes`, {
-        ...quizForm,
-        questions: quizQuestions,
-        courseId
-      });
+      let response;
       
-      console.log("Quiz response:", response.data);
+      if (editingQuiz) {
+        // Update existing quiz
+        response = await axios.put(`/api/admin/courses/${courseId}/quizzes/${editingQuiz._id}`, {
+          ...quizForm,
+          questions: quizQuestions,
+          courseId
+        });
+        
+        console.log("Quiz update response:", response.data);
+        
+        if (response.data.success) {
+          // Update the quizzes array with the updated quiz
+          const updatedQuizzes = quizzes.map(q => 
+            q._id === editingQuiz._id ? response.data.quiz : q
+          );
+          setQuizzes(updatedQuizzes);
+          setEditingQuiz(null);
+        } else {
+          throw new Error(response.data.error || "فشل في تحديث الاختبار");
+        }
+      } else {
+        // Create new quiz
+        response = await axios.post(`/api/admin/courses/${courseId}/quizzes`, {
+          ...quizForm,
+          questions: quizQuestions,
+          courseId
+        });
+        
+        console.log("Quiz creation response:", response.data);
+        
+        if (response.data.success) {
+          setQuizzes([...quizzes, response.data.quiz]);
+        } else {
+          throw new Error(response.data.error || "فشل في إضافة الاختبار");
+        }
+      }
       
+      // Reset form state after successful submission
       if (response.data.success) {
-        setQuizzes([...quizzes, response.data.quiz]);
         setShowQuizForm(false);
         setQuizForm({ 
           title: "", 
@@ -77,12 +150,10 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
           questions: []
         });
         setQuizQuestions([]);
-      } else {
-        throw new Error(response.data.error || "فشل في إضافة الاختبار");
       }
     } catch (error) {
-      console.error("Error adding quiz:", error);
-      setError(error.response?.data?.error || error.message || "فشل في إضافة الاختبار. يرجى المحاولة مرة أخرى.");
+      console.error(editingQuiz ? "Error updating quiz:" : "Error adding quiz:", error);
+      setError(error.response?.data?.error || error.message || (editingQuiz ? "فشل في تعديل الاختبار. يرجى المحاولة مرة أخرى." : "فشل في إضافة الاختبار. يرجى المحاولة مرة أخرى."));
     } finally {
       setIsSubmitting(false);
     }
@@ -177,7 +248,7 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
       
       {showQuizForm && (
         <div className="bg-gray-50 dark:bg-midNight-800 p-4 rounded-md mb-6">
-          <h3 className="text-lg font-semibold mb-4">إضافة اختبار جديد</h3>
+          <h3 className="text-lg font-semibold mb-4">{editingQuiz ? 'تعديل الاختبار' : 'إضافة اختبار جديد'}</h3>
           <form onSubmit={handleQuizSubmit}>
             <div className="mb-4">
               <label className="block text-gray-700 dark:text-gray-300 mb-2" htmlFor="quizTitle">
@@ -460,7 +531,7 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
                 disabled={isSubmitting || quizQuestions.length === 0}
               >
-                {isSubmitting ? 'جاري الحفظ...' : 'حفظ الاختبار'}
+                {isSubmitting ? 'جاري الحفظ...' : (editingQuiz ? 'تحديث الاختبار' : 'حفظ الاختبار')}
               </button>
               <button
                 type="button"
@@ -468,6 +539,7 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
                 onClick={() => {
                   setShowQuizForm(false);
                   setQuizQuestions([]);
+                  setEditingQuiz(null);
                 }}
               >
                 إلغاء
@@ -509,8 +581,27 @@ export default function QuizzesManager({ courseId, quizzes, setQuizzes, chapters
                   </button>
                   <button
                     className="text-red-600 hover:text-red-800 mr-3"
-                    onClick={() => {
-                      // Delete quiz logic
+                    onClick={async () => {
+                      if (window.confirm('هل أنت متأكد من رغبتك في حذف هذا الاختبار؟')) {
+                        try {
+                          setIsSubmitting(true);
+                          setError(null);
+                          
+                          const response = await axios.delete(`/api/admin/courses/${courseId}/quizzes/${quiz._id}`);
+                          
+                          if (response.data.success) {
+                            // Remove the deleted quiz from the state
+                            setQuizzes(quizzes.filter(q => q._id !== quiz._id));
+                          } else {
+                            throw new Error(response.data.error || 'فشل في حذف الاختبار');
+                          }
+                        } catch (error) {
+                          console.error('Error deleting quiz:', error);
+                          setError(error.response?.data?.error || error.message || 'فشل في حذف الاختبار. يرجى المحاولة مرة أخرى.');
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      }
                     }}
                   >
                     حذف

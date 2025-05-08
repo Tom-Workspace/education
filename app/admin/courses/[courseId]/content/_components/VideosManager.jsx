@@ -80,6 +80,7 @@ export default function VideosManager({ courseId, videos, setVideos, chapters })
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDeleteVideo = async (videoId) => {
     if (!window.confirm("هل أنت متأكد من حذف هذا الفيديو؟")) {
       return;

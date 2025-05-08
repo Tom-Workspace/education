@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import Link from "next/link";
 import AdminLayout from "../_components/AdminLayout";
+import Image from "next/image";
 
 const AdminDashboard = () => {
   const router = useRouter();
@@ -14,10 +15,10 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
+  // const [deleteError, setDeleteError] = useState(null);
   
   const handleDeleteCourse = async (courseId) => {
-    if (!confirm('هل أنت متأكد من رغبتك في حذف هذا الكورس؟ هذا الإجراء لا يمكن التراجع عنه.')) {
+    if (!confirm('هل أنت متأكد من رغبتك في حذف هذا الكورس؟ هذا الإجراء لا يمكن التراجع عنه')) {
       return;
     }
     
@@ -148,7 +149,13 @@ const AdminDashboard = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="h-10 w-10 flex-shrink-0">
-                              <img className="h-10 w-10 rounded-full" src={course.thumbnailUrl || "/images/default-course.jpg"} alt={course.title} />
+                              <Image
+                                  src={course.thumbnailUrl || "/images/default-course.jpg"}
+                                  alt={course.title}
+                                  width={40}
+                                  height={40} 
+                                  className="h-10 w-10 rounded-full"
+                                />
                             </div>
                             <div className="mr-4">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">{course.title}</div>
@@ -228,7 +235,13 @@ const AdminDashboard = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="h-10 w-10 flex-shrink-0">
-                              <img className="h-10 w-10 rounded-full" src={user.image || "/images/default-avatar.png"} alt={user.name} />
+                              <Image
+                                src={user.image || "/images/default-avatar.png"}
+                                alt={user.name}
+                                width={40}
+                                height={40} 
+                                className="h-10 w-10 rounded-full"
+                              />
                             </div>
                             <div className="mr-4">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>

@@ -12,7 +12,9 @@ const QuizPage = () => {
   
   const [quiz, setQuiz] = useState(null);
   const [questions, setQuestions] = useState([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [course, setCourse] = useState(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [chapter, setChapter] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
@@ -25,18 +27,85 @@ const QuizPage = () => {
   const [error, setError] = useState(null);
   const timerRef = useRef(null);
 
+  // Define submitQuiz using useCallback to avoid recreation on every render
+  const submitQuiz = React.useCallback(async () => {
+    try {
+      // Stop timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      
+      setLoading(true);
+      
+      // Filter out any unanswered questions
+      const validAnswers = answers.filter(answer => 
+        answer.questionId && answer.selectedOption !== null
+      );
+      
+      const response = await axios.post(`/api/quizzes/${quizId}/submit`, {
+        answers: validAnswers
+      });
+      
+      // Handle case where user has exceeded max attempts
+      if (!response.data.success && response.data.message && response.data.message.includes('maximum number of attempts')) {
+        setAttemptsExceeded(true);
+        setPreviousAttempt(response.data.existingAttempt);
+        setResults({
+          score: response.data.existingAttempt.score,
+          totalQuestions: response.data.existingAttempt.totalQuestions,
+          percentage: Math.round((response.data.existingAttempt.score / response.data.existingAttempt.totalQuestions) * 100),
+          answers: response.data.existingAttempt.answers
+        });
+        setError(response.data.message);
+        setLoading(false);
+        return;
+      }
+      
+      setResults(response.data);
+      setQuizCompleted(true);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error submitting quiz:", err);
+      setError("Failed to submit quiz. Please try again.");
+      setLoading(false);
+    }
+  }, [quizId, answers, timerRef]);
+
   useEffect(() => {
     const fetchQuizData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`/api/quizzes/${quizId}`);
+        console.log('Fetching quiz data for quizId:', quizId);
+        
+        const response = await axios.get(`/api/quizzes/${quizId}`)
+          .catch(error => {
+            console.error('Axios error details:', {
+              message: error.message,
+              response: error.response ? {
+                status: error.response.status,
+                data: error.response.data
+              } : 'No response',
+              request: error.request ? 'Request was made but no response received' : 'No request',
+              config: error.config
+            });
+            throw error;
+          });
+        
+        console.log('Quiz API response:', response.data);
+        
+        // Make sure we have all the required data
+        if (!response.data.quiz) {
+          throw new Error('Quiz data is missing from the API response');
+        }
+        
         setQuiz(response.data.quiz);
-        setQuestions(response.data.questions);
+        setQuestions(response.data.questions || []);
         setChapter(response.data.chapter);
         setCourse(response.data.course);
         
         // Check if user has a previous attempt
         if (response.data.previousAttempt) {
+          console.log('Previous attempt found:', response.data.previousAttempt);
           setPreviousAttempt(response.data.previousAttempt);
           setQuizCompleted(true);
           setResults({
@@ -100,7 +169,7 @@ const QuizPage = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [timeLeft, quizCompleted]);
+  }, [timeLeft, quizCompleted, submitQuiz]);
 
   const handleAnswerSelect = (questionIndex, optionIndex) => {
     const newAnswers = [...answers];
@@ -123,48 +192,7 @@ const QuizPage = () => {
     }
   };
 
-  const submitQuiz = async () => {
-    try {
-      // Stop timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      
-      setLoading(true);
-      
-      // Filter out any unanswered questions
-      const validAnswers = answers.filter(answer => 
-        answer.questionId && answer.selectedOption !== null
-      );
-      
-      const response = await axios.post(`/api/quizzes/${quizId}/submit`, {
-        answers: validAnswers
-      });
-      
-      // Handle case where user has exceeded max attempts
-      if (!response.data.success && response.data.message && response.data.message.includes('maximum number of attempts')) {
-        setAttemptsExceeded(true);
-        setPreviousAttempt(response.data.existingAttempt);
-        setResults({
-          score: response.data.existingAttempt.score,
-          totalQuestions: response.data.existingAttempt.totalQuestions,
-          percentage: Math.round((response.data.existingAttempt.score / response.data.existingAttempt.totalQuestions) * 100),
-          answers: response.data.existingAttempt.answers
-        });
-        setError(response.data.message);
-        setLoading(false);
-        return;
-      }
-      
-      setResults(response.data);
-      setQuizCompleted(true);
-      setLoading(false);
-    } catch (err) {
-      console.error("Error submitting quiz:", err);
-      setError("Failed to submit quiz. Please try again.");
-      setLoading(false);
-    }
-  };
+  // The submitQuiz function has been moved to the top of the component using useCallback
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);

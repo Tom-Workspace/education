@@ -28,6 +28,10 @@ const QuizSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  maxAttempts: {
+    type: Number,
+    default: 1 // Default to 1 attempt allowed
+  },
   position: {
     type: Number,
     default: 0

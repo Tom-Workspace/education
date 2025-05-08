@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+// import { useRouter } from 'next/navigation';
 
 export default function Login() {
-  const router = useRouter();
-  const [isActive, setIsActive] = useState(false);
+  // const router = useRouter();
+  // const [isActive, setIsActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [success, setSuccess] = useState('');
   
   // Refs for animation elements
@@ -22,8 +23,6 @@ export default function Login() {
     setError('');
     try {
       await signIn('google', { callbackUrl: '/' });
-      // Note: Google provider redirects automatically,
-      // so we don't need to handle success state here
     } catch (error) {
       setError('An error occurred during Google login');
       console.error('Google login error:', error);
@@ -154,7 +153,7 @@ export default function Login() {
           <div className="w-full flex flex-col items-center justify-center backdrop-blur-sm bg-midNight-950/10 p-6 rounded-xl">
             <div className="mb-6 text-center">
               <p className="text-white text-lg mb-1 animate-fadeIn tracking-wider" style={{animationDelay: '0.3s'}}>Hello, my name is</p>
-              <p className="text-white text-lg mb-1 animate-fadeIn tracking-wider" style={{animationDelay: '0.6s'}}>Ahmed. I'm a web</p>
+              <p className="text-white text-lg mb-1 animate-fadeIn tracking-wider" style={{animationDelay: '0.6s'}}>Ahmed. I&apos;m a web</p>
               <p className="text-white text-lg mb-6 animate-fadeIn tracking-wider" style={{animationDelay: '0.9s'}}>developer</p>
             </div>
             

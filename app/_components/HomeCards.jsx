@@ -75,7 +75,7 @@ const RecentCards = () => {
       setLoading(false);
       setInitialLoad(false);
     }
-  }, []);
+  }, [cacheExpiry]);
 
   // Initial load of courses
   useEffect(() => {    

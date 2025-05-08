@@ -9,11 +9,33 @@ import UserProgress from '@/app/models/UserProgress';
 export async function POST(request, { params }) {
   try {
     const session = await getServerSession();
+    console.log('Submit API: Session data:', JSON.stringify(session, null, 2));
+    
     if (!session?.user) {
       return NextResponse.json(
         { message: 'Unauthorized' },
         { status: 401 }
       );
+    }
+    
+    // Extract user identifier from session - use email if ID is not available
+    let userId = session.user.id || session.user.sub || session.user._id;
+    const userEmail = session.user.email;
+    
+    if (!userId && !userEmail) {
+      console.error('Submit API: Cannot find user ID or email in session:', session);
+      return NextResponse.json(
+        { message: 'User identifier not found in session' },
+        { status: 400 }
+      );
+    }
+    
+    // If no ID is available, use email as the identifier
+    if (!userId && userEmail) {
+      userId = userEmail;
+      console.log('Submit API: Using email as user identifier:', userId);
+    } else {
+      console.log('Submit API: Using ID as user identifier:', userId);
     }
 
     await dbConnect();
@@ -22,7 +44,7 @@ export async function POST(request, { params }) {
     
     // Check if user has already completed this quiz
     const existingAttempt = await QuizAttempt.findOne({
-      userId: session.user.id,
+      userId: userId,
       quizId: quizId,
       isCompleted: true
     });
@@ -40,11 +62,16 @@ export async function POST(request, { params }) {
     if (existingAttempt) {
       // Count total attempts
       const attemptCount = await QuizAttempt.countDocuments({
-        userId: session.user.id,
+        userId: userId,
         quizId: quizId
       });
       
-      if (attemptCount >= quiz.maxAttempts) {
+      // Default to 1 if maxAttempts is not defined
+      const maxAttempts = quiz.maxAttempts || 1;
+      
+      console.log('Submit API: Attempt count:', attemptCount, 'Max attempts:', maxAttempts);
+      
+      if (attemptCount >= maxAttempts) {
         return NextResponse.json(
           { 
             success: false,
@@ -77,33 +104,28 @@ export async function POST(request, { params }) {
       });
     }
 
-    // Create or update quiz attempt
-    const quizAttempt = await QuizAttempt.findOneAndUpdate(
-      { 
-        userId: session.user.id, 
-        quizId: quizId 
-      },
-      {
-        userId: session.user.id,
-        quizId: quizId,
-        courseId: quiz.courseId,
-        answers: processedAnswers,
-        score: score,
-        totalQuestions: questions.length,
-        completedAt: new Date(),
-        isCompleted: true,
-        updatedAt: new Date()
-      },
-      { 
-        upsert: true, 
-        new: true 
-      }
-    );
+    // Create a new quiz attempt record
+    const quizAttempt = new QuizAttempt({
+      userId: userId,
+      quizId: quizId,
+      courseId: quiz.courseId,
+      answers: processedAnswers,
+      score: score,
+      totalQuestions: questions.length,
+      completedAt: new Date(),
+      isCompleted: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    await quizAttempt.save();
+    
+    console.log('Submit API: Created new quiz attempt:', quizAttempt._id);
 
     // Update user progress
     await UserProgress.findOneAndUpdate(
       { 
-        userId: session.user.id, 
+        userId: userId, 
         courseId: quiz.courseId 
       },
       {
@@ -117,10 +139,10 @@ export async function POST(request, { params }) {
     );
 
     // Calculate and update overall progress
-    const userProgress = await UserProgress.findOne({ 
-      userId: session.user.id, 
-      courseId: quiz.courseId 
-    });
+    // const userProgress = await UserProgress.findOne({ 
+    //   userId: session.user.id, 
+    //   courseId: quiz.courseId 
+    // });
 
     return NextResponse.json({
       success: true,

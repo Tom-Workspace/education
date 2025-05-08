@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const UserProgressSchema = new mongoose.Schema({
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.Mixed, // Allow both ObjectId and String
     ref: 'User',
     required: true
   },

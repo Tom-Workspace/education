@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
 
 const protectedRoutes = ['/profile', '/home', '/course', '/id'];
 const onlyAdmin = ['/id', '/admin'];
-const adminEmail = 'ahmedmohamedmmm39@gmail.com';
+const adminEmail = process.env.ADMIN_EMAIL;
 
 async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;

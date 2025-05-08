@@ -1,8 +1,8 @@
 import dbConnect from '@/app/lib/dbConnect';
 import Quiz from '@/app/models/Quiz';
 import QuizQuestion from '@/app/models/QuizQuestion';
-import Course from '@/app/models/Course';
-import Chapter from '@/app/models/Chapter';
+// import Course from '@/app/models/Course';
+// import Chapter from '@/app/models/Chapter';
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 

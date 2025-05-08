@@ -15,6 +15,7 @@ const VideoPage = () => {
   const { courseNum, videoId } = params;
   
   const [video, setVideo] = useState(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [course, setCourse] = useState(null);
   const [chapter, setChapter] = useState(null);
   const [navigation, setNavigation] = useState({ previous: null, next: null });

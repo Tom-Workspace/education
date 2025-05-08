@@ -6,7 +6,7 @@ import Course from '@/app/models/Course';
 import mongoose from 'mongoose';
 
 // Get user's subscribed courses
-export async function GET(request) {
+export async function GET() {
   try {
     const session = await getServerSession();
     
